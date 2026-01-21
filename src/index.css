@@ -1,0 +1,396 @@
+:root {
+  --bg: #0b0e14;
+  --panel: rgba(255, 255, 255, 0.06);
+  --panel2: rgba(255, 255, 255, 0.09);
+  --text: rgba(255, 255, 255, 0.92);
+  --muted: rgba(255, 255, 255, 0.65);
+  --border: rgba(255, 255, 255, 0.10);
+  --shadow: rgba(0, 0, 0, 0.35);
+
+  --radius: 16px;
+  --radius2: 12px;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: radial-gradient(1200px 600px at 10% 0%, rgba(116, 103, 255, 0.18), transparent 55%),
+              radial-gradient(900px 500px at 100% 20%, rgba(43, 255, 189, 0.10), transparent 60%),
+              var(--bg);
+  color: var(--text);
+}
+
+.appShell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topBar {
+  padding: 18px 18px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logoDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.9);
+  box-shadow: 0 0 0 6px rgba(255,255,255,0.08);
+}
+
+.title {
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 12px 30px var(--shadow);
+}
+.btn:hover { background: var(--panel2); }
+.btn.secondary { color: var(--muted); }
+
+.board {
+  padding: 10px 18px 18px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(260px, 1fr);
+  gap: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+}
+
+.column {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 30px var(--shadow);
+  display: flex;
+  flex-direction: column;
+  min-height: 280px;
+}
+
+.column.over {
+  outline: 2px solid rgba(255,255,255,0.22);
+  background: rgba(255,255,255,0.09);
+}
+
+.columnHeader {
+  padding: 14px 14px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.columnTitleWrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.columnTitle {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pill {
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.columnBtns {
+  display: flex;
+  gap: 8px;
+}
+
+.iconBtn {
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  padding: 6px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.iconBtn:hover { background: rgba(255,255,255,0.10); }
+.iconBtn.danger { color: rgba(255, 120, 120, 0.95); }
+
+.columnBody {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  flex: 1;
+}
+
+.addCard {
+  border: 1px dashed rgba(255,255,255,0.22);
+  background: rgba(255,255,255,0.04);
+  color: var(--muted);
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.addCard:hover { background: rgba(255,255,255,0.07); color: var(--text); }
+
+.cardList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.card {
+  border: 1px solid var(--border);
+  background: rgba(0,0,0,0.18);
+  border-radius: var(--radius2);
+  padding: 10px 10px 8px;
+  box-shadow: 0 10px 22px var(--shadow);
+}
+
+.card.overlay {
+  width: 280px;
+  transform: rotate(1deg);
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.grab {
+  width: 34px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  user-select: none;
+}
+
+.cardTitle {
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.cardDesc {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+.cardBtns {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+.chipBtn {
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.chipBtn:hover { background: rgba(255,255,255,0.10); }
+.chipBtn.danger { color: rgba(255, 120, 120, 0.95); }
+
+.footer {
+  padding: 10px 18px 16px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.footer .dot { opacity: 0.7; }
+
+/* Scrollbar */
+.cardList::-webkit-scrollbar,
+.board::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+.cardList::-webkit-scrollbar-thumb,
+.board::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.16);
+  border-radius: 999px;
+  border: 2px solid rgba(0,0,0,0.25);
+}
+
+/* =========================
+   Modal (Edit Card)
+========================= */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.modalPanel {
+  width: min(620px, 100%);
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(20,20,28,0.92);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+  overflow: hidden;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 14px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modalTitle {
+  font-weight: 900;
+  font-size: 16px;
+}
+
+.modalSubtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.modalBody {
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.modalLabel {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.modalInput,
+.modalTextarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.92);
+  outline: none;
+}
+
+.modalTextarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+/* =========================
+   Inline Card Editing
+========================= */
+
+.card.editing {
+  background: rgba(0,0,0,0.22);
+  border-color: rgba(255,255,255,0.16);
+}
+
+.mutedLabel {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.grab.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cardEditWrap {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.cardEditLabel {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.cardEditInput,
+.cardEditTextarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.92);
+  outline: none;
+}
+
+.cardEditTextarea {
+  resize: vertical;
+  min-height: 110px;
+}
+
+.cardEditActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
