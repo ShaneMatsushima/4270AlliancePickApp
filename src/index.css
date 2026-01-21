@@ -402,3 +402,14 @@ body::before {
   border-radius: 999px;
   border: 2px solid rgba(0, 0, 0, 0.25);
 }
+
+.cardList.over {
+  outline: 2px solid rgba(255,255,255,0.22);
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.10),
+      rgba(0,0,0,0.06) 60%,
+      rgba(255,255,255,0.08)
+    );
+}

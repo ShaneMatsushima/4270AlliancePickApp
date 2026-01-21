@@ -14,12 +14,15 @@ export default function Column({
   onRenameColumn,
   onDeleteColumn,
 }) {
+  // ✅ Make the *scrolling list* the droppable, not the whole column shell
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
   });
 
+  console.log(`📦 Column render: ${column.id} (${cards.length} cards) over=${isOver}`);
+
   return (
-    <section className={`column ${isOver ? "over" : ""}`} ref={setNodeRef}>
+    <section className="column">
       <div className="columnHeader">
         <div className="columnTitleWrap">
           <div className="columnTitle">{column.title}</div>
@@ -37,9 +40,15 @@ export default function Column({
       </div>
 
       <div className="columnBody">
-        <button className="addCard" onClick={onAddCard}>+ Add card</button>
+        <button className="addCard" onClick={onAddCard}>
+          + Add card
+        </button>
 
-        <div className="cardList">
+        {/* ✅ Droppable lives here */}
+        <div
+          ref={setNodeRef}
+          className={`cardList ${isOver ? "over" : ""}`}
+        >
           {cards.map((card) => (
             <Card
               key={card.id}

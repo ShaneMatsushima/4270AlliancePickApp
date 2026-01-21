@@ -6,7 +6,9 @@ import {
   useSensor,
   useSensors,
   closestCorners,
+  MeasuringStrategy,
   type DragStartEvent,
+  type DragOverEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
@@ -33,9 +35,8 @@ import {
 
 import { fetchEventTeamsSimple, normalizeEventKey } from "./utils/tba.js";
 
-console.log("✅ App.tsx loaded (inline edit mode)");
+console.log("✅ App.tsx loaded (inline edit + cross-column fix)");
 
-// ---- Minimal types just for TS sanity ----
 type ColumnType = { id: string; title: string };
 type CardType = {
   id: string;
@@ -76,7 +77,6 @@ export default function App() {
     return { columns: DEFAULT_COLUMNS, cardsByColumn: DEFAULT_CARDS };
   });
 
-  // Fix TS2322: make this explicitly string | null
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
 
   // Inline editing
@@ -93,10 +93,7 @@ export default function App() {
   );
 
   // ----------------- Derived -----------------
-  const columnIds = useMemo<string[]>(
-    () => board.columns.map((c: ColumnType) => c.id),
-    [board.columns]
-  );
+  const columnIds = useMemo(() => board.columns.map((c) => c.id), [board.columns]);
 
   const allCardsFlat = useMemo(() => {
     const out: Array<CardType & { columnId: string }> = [];
@@ -137,7 +134,7 @@ export default function App() {
       meta: { temp: true },
     }) as CardType;
 
-    setBoard((prev: BoardType) => {
+    setBoard((prev) => {
       const next = structuredClone(prev);
       next.cardsByColumn[columnId] = next.cardsByColumn[columnId] || [];
       next.cardsByColumn[columnId].unshift(newCard);
@@ -155,7 +152,7 @@ export default function App() {
   const onCancelEdit = (cardId: string, isTemp: boolean) => {
     console.log("❎ Cancel inline edit:", { cardId, isTemp });
     if (isTemp) {
-      setBoard((prev: BoardType) => deleteCard(prev as any, cardId) as any);
+      setBoard((prev) => deleteCard(prev as any, cardId) as any);
     }
     setEditingCardId(null);
   };
@@ -163,7 +160,7 @@ export default function App() {
   const onSaveEdit = (cardId: string, patch: any, isTemp: boolean) => {
     console.log("✅ Save inline edit:", { cardId, patch, isTemp });
 
-    setBoard((prev: BoardType) =>
+    setBoard((prev) =>
       updateCard(prev as any, cardId, {
         ...patch,
         meta: {
@@ -181,7 +178,7 @@ export default function App() {
     if (!confirm("Delete this card?")) return;
     console.log(`🗑️ Deleting card ${cardId}`);
     if (editingCardId === cardId) setEditingCardId(null);
-    setBoard((prev: BoardType) => deleteCard(prev as any, cardId) as any);
+    setBoard((prev) => deleteCard(prev as any, cardId) as any);
   };
 
   // ----------------- Column Actions -----------------
@@ -189,7 +186,7 @@ export default function App() {
     const title = prompt("Column name?");
     if (!title) return;
     console.log(`🧱 Adding column "${title}"`);
-    setBoard((prev: BoardType) => addColumn(prev as any, title) as any);
+    setBoard((prev) => addColumn(prev as any, title) as any);
   };
 
   const onRenameColumn = (columnId: string) => {
@@ -198,13 +195,13 @@ export default function App() {
     const title = prompt("New column name:", col.title);
     if (!title) return;
     console.log(`🏷️ Renaming column "${columnId}" -> "${title}"`);
-    setBoard((prev: BoardType) => renameColumn(prev as any, columnId, title) as any);
+    setBoard((prev) => renameColumn(prev as any, columnId, title) as any);
   };
 
   const onDeleteColumn = (columnId: string) => {
     if (!confirm("Delete this column and all its cards?")) return;
     console.log(`🧨 Deleting column "${columnId}"`);
-    setBoard((prev: BoardType) => deleteColumn(prev as any, columnId) as any);
+    setBoard((prev) => deleteColumn(prev as any, columnId) as any);
   };
 
   const onReset = () => {
@@ -268,7 +265,7 @@ export default function App() {
         `Loaded ${teams.length} teams. Added ${newCards.length} new cards to Unsorted.`
       );
 
-      setBoard((prev: BoardType) => {
+      setBoard((prev) => {
         const next = structuredClone(prev);
         next.cardsByColumn.unsorted = next.cardsByColumn.unsorted || [];
         next.cardsByColumn.unsorted = [...newCards, ...next.cardsByColumn.unsorted];
@@ -292,14 +289,36 @@ export default function App() {
 
   // ----------------- DnD Events -----------------
   const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event;
-    setActiveCardId(String(active.id));
-    console.log("🟦 Drag start:", active.id);
+    setActiveCardId(String(event.active.id));
+    console.log("🟦 Drag start:", event.active.id);
   };
 
   const handleDragCancel = () => {
     console.log("🟥 Drag cancel");
     setActiveCardId(null);
+  };
+
+  /**
+   * ✅ KEY FIX:
+   * Move the card as soon as it hovers a different column.
+   * This avoids cases where `over` becomes null on drop due to scroll/overflow.
+   */
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = String(active.id);
+    const overId = String(over.id);
+
+    const fromCol = getColumnIdForDroppable(activeId);
+    const toCol = getColumnIdForDroppable(overId);
+
+    if (!fromCol || !toCol) return;
+    if (fromCol === toCol) return;
+
+    console.log(`🟪 Drag over: moving ${activeId} from "${fromCol}" -> "${toCol}" (over ${overId})`);
+
+    setBoard((prev) => moveCardAcrossColumns(prev as any, activeId, fromCol, toCol, overId) as any);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -314,43 +333,31 @@ export default function App() {
     const activeId = String(active.id);
     const overId = String(over.id);
 
-    if (activeId === overId) {
-      console.log("✅ Dropped on itself:", activeId);
-      return;
-    }
-
     const fromCol = getColumnIdForDroppable(activeId);
     const toCol = getColumnIdForDroppable(overId);
 
-    if (!fromCol || !toCol) {
-      console.log("⚠️ Could not resolve columns for drag end", { fromCol, toCol });
-      return;
-    }
+    if (!fromCol || !toCol) return;
 
+    // If same column, reorder
     if (fromCol === toCol) {
       const cards = board.cardsByColumn[fromCol] || [];
       const oldIndex = cards.findIndex((c) => c.id === activeId);
       const newIndex = cards.findIndex((c) => c.id === overId);
       if (oldIndex === -1 || newIndex === -1) return;
 
-      console.log(`↕️ Reordering within "${fromCol}": ${oldIndex} -> ${newIndex}`);
+      console.log(`↕️ Drag end reorder within "${fromCol}": ${oldIndex} -> ${newIndex}`);
 
-      setBoard((prev: BoardType) => {
+      setBoard((prev) => {
         const next = structuredClone(prev);
-        next.cardsByColumn[fromCol] = arrayMove(
-          next.cardsByColumn[fromCol],
-          oldIndex,
-          newIndex
-        );
+        next.cardsByColumn[fromCol] = arrayMove(next.cardsByColumn[fromCol], oldIndex, newIndex);
         return next;
       });
       return;
     }
 
-    console.log(`➡️ Moving card ${activeId} from "${fromCol}" to "${toCol}" (over ${overId})`);
-    setBoard((prev: BoardType) =>
-      moveCardAcrossColumns(prev as any, activeId, fromCol, toCol, overId) as any
-    );
+    // Cross-column already handled by onDragOver; this is just a safety net
+    console.log(`✅ Drag end cross-column (safety): ${activeId} -> ${toCol}`);
+    setBoard((prev) => moveCardAcrossColumns(prev as any, activeId, fromCol, toCol, overId) as any);
   };
 
   return (
@@ -370,6 +377,7 @@ export default function App() {
         </div>
       </header>
 
+      {/* 🔌 TBA Import Bar */}
       <div style={{ padding: "0 18px 10px", display: "flex", gap: 10, alignItems: "center" }}>
         <div style={{ flex: 1, minWidth: 200 }}>
           <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 6 }}>
@@ -408,8 +416,14 @@ export default function App() {
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
+        measuring={{
+          droppable: {
+            strategy: MeasuringStrategy.WhileDragging,
+          },
+        }}
         onDragStart={handleDragStart}
         onDragCancel={handleDragCancel}
+        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
         <div className="board">
