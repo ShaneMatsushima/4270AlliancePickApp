@@ -21,7 +21,6 @@ export default function Card({
     isDragging,
   } = useSortable({
     id: card.id,
-    // While editing, disable DnD to prevent accidental drags
     disabled: isEditing,
   });
 
@@ -35,18 +34,15 @@ export default function Card({
   const nickname = card?.meta?.nickname;
 
   const displayTitle = useMemo(() => {
-    // Team cards show team number + nickname (nice display)
-    if (teamNumber) {
-      return `Team ${teamNumber}${nickname ? ` — ${nickname}` : ""}`;
-    }
-    // Non-team cards show title
+    if (teamNumber) return `Team ${teamNumber}${nickname ? ` — ${nickname}` : ""}`;
     return card?.title || "";
   }, [teamNumber, nickname, card?.title]);
+
+  const a = card?.meta?.analytics;
 
   const [title, setTitle] = useState(card?.title || "");
   const [description, setDescription] = useState(card?.description || "");
 
-  // When card enters edit mode, load current values into inputs
   useEffect(() => {
     if (!isEditing) return;
     setTitle(card?.title || "");
@@ -54,7 +50,6 @@ export default function Card({
     console.log(`📝 Editing card (inline): ${card?.id}`);
   }, [isEditing, card?.id, card?.title, card?.description]);
 
-  // Auto-start edit if it's a newly added temp card
   useEffect(() => {
     if (isTemp && !isEditing) {
       console.log(`🆕 Temp card detected, requesting edit start: ${card.id}`);
@@ -79,6 +74,9 @@ export default function Card({
     onCancelEdit?.(card.id, isTemp);
   };
 
+  const wlText =
+    a?.wl && a.wl.wins != null ? `${a.wl.wins}-${a.wl.losses}-${a.wl.ties}` : null;
+
   return (
     <article
       ref={setNodeRef}
@@ -96,18 +94,36 @@ export default function Card({
         </div>
 
         <div className="cardTitle">
-          {isEditing ? (
-            <span className="mutedLabel">{isTemp ? "New Card" : "Editing"}</span>
-          ) : (
-            displayTitle
-          )}
+          {isEditing ? <span className="mutedLabel">{isTemp ? "New Card" : "Editing"}</span> : displayTitle}
         </div>
       </div>
 
-      {/* Normal view */}
       {!isEditing ? (
         <>
           {card?.description ? <div className="cardDesc">{card.description}</div> : null}
+
+          {/* ✅ Analytics badges */}
+          {a ? (
+            <>
+              <div className="badges">
+                {a.rank != null && <span className="badge">Rank {a.rank}</span>}
+                {wlText && <span className="badge">{wlText}</span>}
+                {a.epa != null && <span className="badge">EPA {Number(a.epa).toFixed(1)}</span>}
+                <span className="badge">Fuel {Number(a.avgFuel || 0).toFixed(1)}</span>
+                <span className="badge">Hang {Number(a.avgHang || 0).toFixed(1)}</span>
+              </div>
+
+              {Array.isArray(a.recent) && a.recent.length > 0 ? (
+                <div className="recentRow">
+                  {a.recent.map((m) => (
+                    <span key={m.matchKey} className={`recent ${m.wl}`}>
+                      {m.wl} {m.score}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : null}
 
           <div className="cardBtns">
             <button className="chipBtn" onClick={() => onStartEdit?.(card.id)}>
@@ -119,7 +135,6 @@ export default function Card({
           </div>
         </>
       ) : (
-        /* Edit-in-place view */
         <div className="cardEditWrap">
           <label className="cardEditLabel">Title</label>
           <input
