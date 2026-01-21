@@ -214,70 +214,81 @@ export default function App() {
 
   // ----------------- TBA Import -----------------
   const importTeamsFromTBA = async () => {
-    const eventKey = normalizeEventKey(compCode) as string;
-    if (!eventKey) return;
+  const eventKey = normalizeEventKey(compCode) as string;
+  if (!eventKey) return;
 
-    console.log(`🏟️ Import requested. Input="${compCode}" -> eventKey="${eventKey}"`);
-    setImporting(true);
-    setImportStatus(`Loading teams for ${eventKey}...`);
+  console.log(`🏟️ Import requested. Input="${compCode}" -> eventKey="${eventKey}"`);
 
-    try {
-      const teams = (await fetchEventTeamsSimple(eventKey)) as any[];
+  // ✅ Clear the board FIRST (all columns), then load teams
+  console.log("🧼 Clearing board before loading new event teams...");
+  setEditingCardId(null);
+  setActiveCardId(null);
 
-      const existingKeys = new Set<string>();
-      for (const col of board.columns) {
-        const cards = board.cardsByColumn[col.id] || [];
-        for (const c of cards) {
-          if ((c as any)?.meta?.tbaTeamKey) existingKeys.add((c as any).meta.tbaTeamKey);
-        }
-      }
+  setBoard((prev) => {
+    const next = structuredClone(prev);
 
-      const newCards: CardType[] = [];
-      for (const t of teams) {
-        const teamKey = t.key;
-        if (existingKeys.has(teamKey)) continue;
-
-        const teamNumber = t.team_number;
-        const nickname = t.nickname || t.name || "";
-        const id = `tba_${eventKey}_${teamKey}`;
-
-        newCards.push(
-          createCard({
-            id,
-            title: `Team ${teamNumber}`,
-            description: "",
-            meta: {
-              source: "tba",
-              eventKey,
-              tbaTeamKey: teamKey,
-              teamNumber,
-              nickname,
-              city: t.city || "",
-              stateProv: t.state_prov || "",
-              country: t.country || "",
-            },
-          }) as CardType
-        );
-      }
-
-      console.log(`✅ Import complete. New cards added: ${newCards.length}`);
-      setImportStatus(
-        `Loaded ${teams.length} teams. Added ${newCards.length} new cards to Unsorted.`
-      );
-
-      setBoard((prev) => {
-        const next = structuredClone(prev);
-        next.cardsByColumn.unsorted = next.cardsByColumn.unsorted || [];
-        next.cardsByColumn.unsorted = [...newCards, ...next.cardsByColumn.unsorted];
-        return next;
-      });
-    } catch (e: any) {
-      console.log("❌ Import failed:", e);
-      setImportStatus(`Error: ${e?.message || String(e)}`);
-    } finally {
-      setImporting(false);
+    // Clear cards from ALL columns that exist
+    for (const col of next.columns) {
+      next.cardsByColumn[col.id] = [];
     }
-  };
+
+    // Also clear any stray keys that might exist in cardsByColumn
+    for (const key of Object.keys(next.cardsByColumn)) {
+      next.cardsByColumn[key] = [];
+    }
+
+    return next;
+  });
+
+  setImporting(true);
+  setImportStatus(`Loading teams for ${eventKey}...`);
+
+  try {
+    const teams = (await fetchEventTeamsSimple(eventKey)) as any[];
+
+    const newCards: CardType[] = [];
+    for (const t of teams) {
+      const teamKey = t.key; // "frc4270"
+      const teamNumber = t.team_number;
+      const nickname = t.nickname || t.name || "";
+      const id = `tba_${eventKey}_${teamKey}`;
+
+      newCards.push(
+        createCard({
+          id,
+          title: `Team ${teamNumber}`,
+          description: "",
+          meta: {
+            source: "tba",
+            eventKey,
+            tbaTeamKey: teamKey,
+            teamNumber,
+            nickname,
+            city: t.city || "",
+            stateProv: t.state_prov || "",
+            country: t.country || "",
+          },
+        }) as CardType
+      );
+    }
+
+    console.log(`✅ Loaded ${teams.length} teams. Setting board to fresh event list.`);
+    setImportStatus(`Loaded ${teams.length} teams. Board cleared + refreshed.`);
+
+    // ✅ Put them in Unsorted (fresh)
+    setBoard((prev) => {
+      const next = structuredClone(prev);
+      next.cardsByColumn.unsorted = [...newCards];
+      return next;
+    });
+  } catch (e: any) {
+    console.log("❌ Import failed:", e);
+    setImportStatus(`Error: ${e?.message || String(e)}`);
+  } finally {
+    setImporting(false);
+  }
+};
+
 
   // ----------------- DnD Helpers -----------------
   const getColumnIdForDroppable = (id: string) => {
