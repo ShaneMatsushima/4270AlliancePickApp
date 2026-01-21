@@ -34,8 +34,9 @@ import {
 } from "./utils/boardStore.js";
 
 import { fetchEventTeamsSimple, normalizeEventKey } from "./utils/tba.js";
+import { buildEventAnalytics } from "./utils/analytics.js";
 
-console.log("✅ App.tsx loaded (inline edit + cross-column fix)");
+console.log("✅ App.tsx loaded (board + analytics)");
 
 type ColumnType = { id: string; title: string };
 type CardType = {
@@ -66,7 +67,6 @@ const DEFAULT_CARDS: BoardType["cardsByColumn"] = {
 };
 
 export default function App() {
-  // ----------------- State -----------------
   const [board, setBoard] = useState<BoardType>(() => {
     const loaded = loadBoard() as BoardType | null;
     if (loaded) {
@@ -78,21 +78,16 @@ export default function App() {
   });
 
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
-
-  // Inline editing
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
 
-  // TBA import UI
   const [compCode, setCompCode] = useState<string>("HIHO");
   const [importStatus, setImportStatus] = useState<string>("");
   const [importing, setImporting] = useState<boolean>(false);
 
-  // ----------------- DnD Sensors -----------------
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   );
 
-  // ----------------- Derived -----------------
   const columnIds = useMemo(() => board.columns.map((c) => c.id), [board.columns]);
 
   const allCardsFlat = useMemo(() => {
@@ -110,13 +105,13 @@ export default function App() {
     return found ? { ...found.card, columnId: found.columnId } : null;
   }, [activeCardId, board]);
 
-  // ----------------- Persistence -----------------
+  // Persist
   const saveTimer = useRef<number | null>(null);
   useEffect(() => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
       saveBoard(board as any);
-      console.log("💾 Board saved to localStorage");
+      console.log("💾 Board saved");
     }, 150);
 
     return () => {
@@ -124,10 +119,9 @@ export default function App() {
     };
   }, [board]);
 
-  // ----------------- Card Actions -----------------
+  // Actions
   const onAddCard = (columnId: string) => {
-    console.log(`➕ Add card (inline) requested for column "${columnId}"`);
-
+    console.log(`➕ Add card to "${columnId}"`);
     const newCard = createCard({
       title: "",
       description: "",
@@ -144,22 +138,14 @@ export default function App() {
     setEditingCardId(newCard.id);
   };
 
-  const onStartEdit = (cardId: string) => {
-    console.log("📝 Start inline edit:", cardId);
-    setEditingCardId(cardId);
-  };
+  const onStartEdit = (cardId: string) => setEditingCardId(cardId);
 
   const onCancelEdit = (cardId: string, isTemp: boolean) => {
-    console.log("❎ Cancel inline edit:", { cardId, isTemp });
-    if (isTemp) {
-      setBoard((prev) => deleteCard(prev as any, cardId) as any);
-    }
+    if (isTemp) setBoard((prev) => deleteCard(prev as any, cardId) as any);
     setEditingCardId(null);
   };
 
   const onSaveEdit = (cardId: string, patch: any, isTemp: boolean) => {
-    console.log("✅ Save inline edit:", { cardId, patch, isTemp });
-
     setBoard((prev) =>
       updateCard(prev as any, cardId, {
         ...patch,
@@ -170,22 +156,18 @@ export default function App() {
         },
       }) as any
     );
-
     setEditingCardId(null);
   };
 
   const onDeleteCard = (cardId: string) => {
     if (!confirm("Delete this card?")) return;
-    console.log(`🗑️ Deleting card ${cardId}`);
     if (editingCardId === cardId) setEditingCardId(null);
     setBoard((prev) => deleteCard(prev as any, cardId) as any);
   };
 
-  // ----------------- Column Actions -----------------
   const onAddColumn = () => {
     const title = prompt("Column name?");
     if (!title) return;
-    console.log(`🧱 Adding column "${title}"`);
     setBoard((prev) => addColumn(prev as any, title) as any);
   };
 
@@ -194,67 +176,58 @@ export default function App() {
     if (!col) return;
     const title = prompt("New column name:", col.title);
     if (!title) return;
-    console.log(`🏷️ Renaming column "${columnId}" -> "${title}"`);
     setBoard((prev) => renameColumn(prev as any, columnId, title) as any);
   };
 
   const onDeleteColumn = (columnId: string) => {
     if (!confirm("Delete this column and all its cards?")) return;
-    console.log(`🧨 Deleting column "${columnId}"`);
     setBoard((prev) => deleteColumn(prev as any, columnId) as any);
   };
 
   const onReset = () => {
     if (!confirm("Reset board to defaults?")) return;
-    console.log("🔄 Resetting board");
-    const next: BoardType = { columns: DEFAULT_COLUMNS, cardsByColumn: DEFAULT_CARDS };
     setEditingCardId(null);
-    setBoard(structuredClone(next));
+    setActiveCardId(null);
+    setBoard(structuredClone({ columns: DEFAULT_COLUMNS, cardsByColumn: DEFAULT_CARDS }));
   };
 
-  // ----------------- TBA Import -----------------
+  // ✅ Clear ALL columns
+  const clearAllColumns = () => {
+    setEditingCardId(null);
+    setActiveCardId(null);
+    setBoard((prev) => {
+      const next = structuredClone(prev);
+      for (const col of next.columns) next.cardsByColumn[col.id] = [];
+      for (const key of Object.keys(next.cardsByColumn)) next.cardsByColumn[key] = [];
+      return next;
+    });
+  };
+
+  // ✅ Import Teams + Analytics (fresh board per event)
   const importTeamsFromTBA = async () => {
-  const eventKey = normalizeEventKey(compCode) as string;
-  if (!eventKey) return;
+    const eventKey = normalizeEventKey(compCode);
+    if (!eventKey) return;
 
-  console.log(`🏟️ Import requested. Input="${compCode}" -> eventKey="${eventKey}"`);
+    console.log("🏟️ Loading event:", eventKey);
 
-  // ✅ Clear the board FIRST (all columns), then load teams
-  console.log("🧼 Clearing board before loading new event teams...");
-  setEditingCardId(null);
-  setActiveCardId(null);
+    // Clear everything first (fixes “not all columns clear”)
+    console.log("🧼 Clearing board for new tournament...");
+    clearAllColumns();
 
-  setBoard((prev) => {
-    const next = structuredClone(prev);
+    setImporting(true);
+    setImportStatus(`Loading teams for ${eventKey}...`);
 
-    // Clear cards from ALL columns that exist
-    for (const col of next.columns) {
-      next.cardsByColumn[col.id] = [];
-    }
+    try {
+      const teams = (await fetchEventTeamsSimple(eventKey)) as any[];
 
-    // Also clear any stray keys that might exist in cardsByColumn
-    for (const key of Object.keys(next.cardsByColumn)) {
-      next.cardsByColumn[key] = [];
-    }
+      // Create fresh team cards in unsorted
+      const newCards: CardType[] = teams.map((t) => {
+        const teamKey = t.key; // "frc####"
+        const teamNumber = t.team_number;
+        const nickname = t.nickname || t.name || "";
+        const id = `tba_${eventKey}_${teamKey}`;
 
-    return next;
-  });
-
-  setImporting(true);
-  setImportStatus(`Loading teams for ${eventKey}...`);
-
-  try {
-    const teams = (await fetchEventTeamsSimple(eventKey)) as any[];
-
-    const newCards: CardType[] = [];
-    for (const t of teams) {
-      const teamKey = t.key; // "frc4270"
-      const teamNumber = t.team_number;
-      const nickname = t.nickname || t.name || "";
-      const id = `tba_${eventKey}_${teamKey}`;
-
-      newCards.push(
-        createCard({
+        return createCard({
           id,
           title: `Team ${teamNumber}`,
           description: "",
@@ -268,37 +241,58 @@ export default function App() {
             stateProv: t.state_prov || "",
             country: t.country || "",
           },
-        }) as CardType
-      );
+        }) as CardType;
+      });
+
+      setBoard((prev) => {
+        const next = structuredClone(prev);
+        next.cardsByColumn.unsorted = newCards;
+        return next;
+      });
+
+      setImportStatus(`Loaded ${teams.length} teams. Pulling analytics...`);
+      console.log("📈 Pulling analytics from TBA + Statbotics...");
+
+      const analyticsByTeamKey = await buildEventAnalytics(eventKey, teams, 2026);
+
+      // Patch analytics into cards (across all columns, though only unsorted is populated here)
+      setBoard((prev) => {
+        const next = structuredClone(prev);
+        for (const col of next.columns) {
+          next.cardsByColumn[col.id] = (next.cardsByColumn[col.id] || []).map((card) => {
+            const teamKey = card?.meta?.tbaTeamKey;
+            if (!teamKey) return card;
+            const a = analyticsByTeamKey[teamKey];
+            if (!a) return card;
+            return {
+              ...card,
+              meta: {
+                ...(card.meta || {}),
+                analytics: a,
+              },
+            };
+          });
+        }
+        return next;
+      });
+
+      setImportStatus(`Loaded ${teams.length} teams + analytics (Fuel/Hang/WL/EPA).`);
+      console.log("✅ Analytics applied.");
+    } catch (e: any) {
+      console.log("❌ Import failed:", e);
+      setImportStatus(`Error: ${e?.message || String(e)}`);
+    } finally {
+      setImporting(false);
     }
+  };
 
-    console.log(`✅ Loaded ${teams.length} teams. Setting board to fresh event list.`);
-    setImportStatus(`Loaded ${teams.length} teams. Board cleared + refreshed.`);
-
-    // ✅ Put them in Unsorted (fresh)
-    setBoard((prev) => {
-      const next = structuredClone(prev);
-      next.cardsByColumn.unsorted = [...newCards];
-      return next;
-    });
-  } catch (e: any) {
-    console.log("❌ Import failed:", e);
-    setImportStatus(`Error: ${e?.message || String(e)}`);
-  } finally {
-    setImporting(false);
-  }
-};
-
-
-  // ----------------- DnD Helpers -----------------
+  // DnD helpers
   const getColumnIdForDroppable = (id: string) => {
     if (columnIds.includes(id)) return id;
     const found = findCardById(board as any, id) as any;
-    if (found) return found.columnId;
-    return null;
+    return found ? found.columnId : null;
   };
 
-  // ----------------- DnD Events -----------------
   const handleDragStart = (event: DragStartEvent) => {
     setActiveCardId(String(event.active.id));
     console.log("🟦 Drag start:", event.active.id);
@@ -309,11 +303,7 @@ export default function App() {
     setActiveCardId(null);
   };
 
-  /**
-   * ✅ KEY FIX:
-   * Move the card as soon as it hovers a different column.
-   * This avoids cases where `over` becomes null on drop due to scroll/overflow.
-   */
+  // ✅ Move across columns on hover (reliable cross-column drag)
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
     if (!over) return;
@@ -327,8 +317,7 @@ export default function App() {
     if (!fromCol || !toCol) return;
     if (fromCol === toCol) return;
 
-    console.log(`🟪 Drag over: moving ${activeId} from "${fromCol}" -> "${toCol}" (over ${overId})`);
-
+    console.log(`🟪 Drag over move: ${activeId} ${fromCol} -> ${toCol}`);
     setBoard((prev) => moveCardAcrossColumns(prev as any, activeId, fromCol, toCol, overId) as any);
   };
 
@@ -337,7 +326,7 @@ export default function App() {
     setActiveCardId(null);
 
     if (!over) {
-      console.log("⬜ Drag end: no drop target");
+      console.log("⬜ Drag end: no target");
       return;
     }
 
@@ -349,15 +338,14 @@ export default function App() {
 
     if (!fromCol || !toCol) return;
 
-    // If same column, reorder
+    // Reorder within same column
     if (fromCol === toCol) {
       const cards = board.cardsByColumn[fromCol] || [];
       const oldIndex = cards.findIndex((c) => c.id === activeId);
       const newIndex = cards.findIndex((c) => c.id === overId);
       if (oldIndex === -1 || newIndex === -1) return;
 
-      console.log(`↕️ Drag end reorder within "${fromCol}": ${oldIndex} -> ${newIndex}`);
-
+      console.log(`↕️ Reorder "${fromCol}": ${oldIndex} -> ${newIndex}`);
       setBoard((prev) => {
         const next = structuredClone(prev);
         next.cardsByColumn[fromCol] = arrayMove(next.cardsByColumn[fromCol], oldIndex, newIndex);
@@ -366,8 +354,7 @@ export default function App() {
       return;
     }
 
-    // Cross-column already handled by onDragOver; this is just a safety net
-    console.log(`✅ Drag end cross-column (safety): ${activeId} -> ${toCol}`);
+    // Cross-column already handled by dragOver; this is a safety net.
     setBoard((prev) => moveCardAcrossColumns(prev as any, activeId, fromCol, toCol, overId) as any);
   };
 
@@ -388,7 +375,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* 🔌 TBA Import Bar */}
       <div style={{ padding: "0 18px 10px", display: "flex", gap: 10, alignItems: "center" }}>
         <div style={{ flex: 1, minWidth: 200 }}>
           <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 6 }}>
@@ -427,11 +413,7 @@ export default function App() {
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
-        measuring={{
-          droppable: {
-            strategy: MeasuringStrategy.WhileDragging,
-          },
-        }}
+        measuring={{ droppable: { strategy: MeasuringStrategy.WhileDragging } }}
         onDragStart={handleDragStart}
         onDragCancel={handleDragCancel}
         onDragOver={handleDragOver}
